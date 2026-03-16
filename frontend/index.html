@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Engine - Dashboard</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body class="light-theme">
+    <div class="app-wrapper">
+        <!-- Top Navbar -->
+        <header class="top-bar">
+            <div class="brand">
+                <div class="logo-box">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#3b82f6" />
+                        <path d="M2 17L12 22L22 17" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                        <path d="M2 12L12 17L22 12" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </svg>
+                </div>
+                <h2>Attendance Engine</h2>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="device-key-display" style="display: none; background: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-weight: bold; letter-spacing: 1px;"></span>
+                <button id="connect-btn" class="status-btn" onclick="requestConnection()">
+                    <span class="link-icon">🔗</span>
+                    Connect
+                </button>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" onclick="showTab('general')">GENERAL</button>
+            <button class="tab-btn" onclick="showTab('info')">INFO</button>
+            <button class="tab-btn" onclick="showTab('admin')">ADMIN</button>
+        </nav>
+
+        <main class="content-area">
+            <!-- GENERAL TAB -->
+            <section id="general" class="tab-pane active">
+                <div class="dashboard-grid">
+                    <div class="left-col">
+                        <div class="feed-card card">
+                            <div class="card-header">
+                                <span class="badge live">● LIVE FEED</span>
+                            </div>
+                            <div class="video-window">
+                                <div class="id-overlay" id="id-overlay" style="display: none;">
+                                    ID: <span id="overlay-id">1042</span> - <span id="overlay-name">MATTHEW</span>
+                                </div>
+                                <img id="camera-stream" src="/static/img/profile_icon.png" alt="Stream">
+                                <div class="stats-overlay">
+                                    <span id="overlay-fps">30 FPS</span> |
+                                    LATENCY: <span id="overlay-latency">42ms</span> |
+                                    TEMP: <span id="overlay-temp">54°C</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="engine-controls-card card">
+                            <div class="engine-status-row">
+                                <div class="engine-buttons">
+                                    <button class="ctrl-btn stop" onclick="apiCall('/api/engine/stop', 'POST')">
+                                        <div class="square"></div>
+                                    </button>
+                                    <button class="ctrl-btn play" onclick="apiCall('/api/engine/start', 'POST')">
+                                        <div class="triangle"></div>
+                                    </button>
+                                </div>
+                                <div class="status-info">
+                                    <span class="label">ENGINE STATUS</span>
+                                    <div class="status-val">
+                                        <span class="dot"></span>
+                                        <span id="engine-status-text">Stopped</span>
+                                    </div>
+                                </div>
+                                <div class="hw-check">
+                                    <span class="label">HARDWARE CHECK</span>
+                                    <div class="hw-val">Camera OK</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="right-col">
+                        <div class="registration-card card">
+                            <h3>Register New Student</h3>
+                            <div class="form-group">
+                                <label>Name</label>
+                                <input type="text" id="reg-name" placeholder="Full name">
+                            </div>
+                            <div class="form-group">
+                                <label>College ID</label>
+                                <input type="text" id="reg-id" placeholder="e.g. CS2024-001">
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="reg-bus"> Bus Student
+                                </label>
+                            </div>
+                            <button class="submit-btn" onclick="registerStudent()">
+                                <span class="btn-icon">👤</span>
+                                Submit Registration
+                            </button>
+                            <p class="instructions">Position the student in front of the camera before clicking submit.
+                                5 photos will be captured for training.</p>
+                        </div>
+
+                        <div class="overview-card card">
+                            <div class="overview-header">
+                                <span class="icon">👥</span>
+                                Daily Overview
+                            </div>
+                            <div class="overview-stats">
+                                <div class="stat-box">
+                                    <span class="label">LOGS</span>
+                                    <span class="val" id="stats-present">0</span>
+                                </div>
+                                <div class="stat-box">
+                                    <span class="label">REGISTERED</span>
+                                    <span class="val" id="stats-registered">452</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- INFO TAB -->
+            <section id="info" class="tab-pane">
+                <div class="info-grid">
+                    <div class="info-left">
+                        <div class="device-card card">
+                            <h3>Device Info</h3>
+                            <div class="info-list">
+                                <div class="info-item">
+                                    <span class="label">Device Model</span>
+                                    <span class="val" id="info-model">RPI 4 Model B</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="label">Network Status</span>
+                                    <span class="val"><span class="dot online"></span> Connected</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="label">Camera Stream</span>
+                                    <span class="val">📹 Active</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="label">CPU Temp</span>
+                                    <span class="val" id="info-temp">42°C</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="label">Uptime</span>
+                                    <span class="val" id="info-uptime">--</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="label">IP Address</span>
+                                    <span class="val" id="info-ip">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="storage-card card">
+                            <div class="storage-header">
+                                <span class="icon">💾</span>
+                                <div>
+                                    <span class="label">STORAGE USAGE</span>
+                                    <div class="val" id="info-storage">12.4 GB / 32 GB</div>
+                                </div>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress" style="width: 38.7%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="info-right">
+                        <div class="logs-card card">
+                            <div class="logs-header">
+                                <h3>Activity Logs</h3>
+                                <div class="log-actions">
+                                    <span class="badge-realtime">REALTIME</span>
+                                    <button class="download-icon">📥</button>
+                                </div>
+                            </div>
+                            <div class="log-viewer" id="log-viewer">
+                                <!-- Logs will be injected here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ADMIN TAB -->
+            <section id="admin" class="tab-pane locked">
+                <div class="admin-container">
+                    <div class="settings-card card">
+                        <h3>Operation Time Settings</h3>
+                        <p class="subtitle">Define the active window for face recognition processing.</p>
+                        <div class="time-inputs">
+                            <div class="form-group">
+                                <label>From</label>
+                                <input type="time" id="start-time" value="08:00">
+                            </div>
+                            <div class="form-group">
+                                <label>To</label>
+                                <input type="time" id="end-time" value="18:00">
+                            </div>
+                        </div>
+                        <button class="submit-btn" onclick="saveSettings()" style="margin-top: 1rem;">
+                            <span class="icon">💾</span> Save Settings
+                        </button>
+                    </div>
+
+                    <div class="controls-card card">
+                        <h3>System Controls</h3>
+                        <div class="btn-group">
+                            <button class="admin-btn shutdown" onclick="apiCall('/api/system/shutdown', 'POST')">
+                                <span class="icon">⏻</span> Shutdown
+                            </button>
+                            <button class="admin-btn disconnect" onclick="disconnectDevice()">
+                                <span class="icon">🔗</span> Disconnect
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="debug-card card">
+                        <h3>Debug & Diagnostics</h3>
+                        <div class="toggle-list">
+                            <div class="toggle-item">
+                                <div>
+                                    <div class="toggle-label">Log Capture</div>
+                                    <div class="toggle-desc">Record engine events to disk</div>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="toggle-log" checked>
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="toggle-item">
+                                <div>
+                                    <div class="toggle-label">Frame Overlay</div>
+                                    <div class="toggle-desc">Show face boxes and names</div>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="toggle-overlay" checked>
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="toggle-item">
+                                <div>
+                                    <div class="toggle-label">Show FPS</div>
+                                    <div class="toggle-desc">Display frame rate overlay</div>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="toggle-fps" checked>
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <button class="send-logs-btn" onclick="apiCall('/api/system/logs/send', 'POST')">
+                            <span class="icon">✈</span> Send Logs to Server
+                        <div class="system-logs-action" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+                            <button class="submit-btn outline" onclick="openSystemLogsViewer()">
+                                <span class="icon">📄</span> View System Logs
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="admin-footer-stats">
+                        <div class="footer-stat">
+                            <span class="label">CPU TEMP</span>
+                            <span class="val" id="admin-temp">42°C</span>
+                        </div>
+                        <div class="footer-stat">
+                            <span class="label">RAM USAGE</span>
+                            <span class="val" id="admin-ram">1.2GB / 4GB</span>
+                        </div>
+                        <div class="footer-stat">
+                            <span class="label">UPTIME</span>
+                            <span class="val" id="admin-uptime">4d 12h</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="bottom-bar">
+            <div class="left-stats">
+                <span id="footer-db">● DATABASE: CONNECTED</span>
+                <span id="footer-pi">● RASPBERRY PI 4B - 10% LOAD</span>
+            </div>
+            <div class="right-info">
+                v1.0
+            </div>
+        </footer>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div id="admin-modal" class="modal">
+        <div class="modal-content card">
+            <div class="modal-header">
+                <h3>Admin Authentication</h3>
+                <button class="close-btn" onclick="closeAdminModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="admin-user" placeholder="Enter username">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="admin-pass" placeholder="Enter password">
+                        <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">👁️</button>
+                    </div>
+                </div>
+                <div id="login-error" class="error-text" style="display: none;">Invalid credentials</div>
+                <button class="submit-btn" onclick="performAdminLogin()">Login to Dashboard</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Logs Modal -->
+    <div id="system-logs-modal" class="modal">
+        <div class="modal-content card" style="max-width: 800px; width: 90%;">
+            <div class="modal-header">
+                <h3>System Logs Viewer</h3>
+                <div class="log-actions" style="margin-left: auto; margin-right: 1rem;">
+                    <button class="status-btn" onclick="fetchSystemLogs()">🔄 Refresh Logs</button>
+                </div>
+                <button class="close-btn" onclick="closeSystemLogsViewer()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="log-viewer" id="admin-system-logs" style="max-height: 400px; overflow-y: auto; background-color: #1a1a1a; color: #e0e0e0; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 13px;">
+                    <!-- Logs injected here via JS -->
+                    Loading logs...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

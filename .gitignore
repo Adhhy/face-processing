@@ -1,4 +1,38 @@
-.venv/
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Environments
+.env
+.venv/
+venv/
+ENV/
+
+# Logs and databases
+logs/
+*.log
+*.sqlite3
+*.db
 attendance.db
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Project specific overrides/artifacts
+analysis_results.md
+tests/
+stitch/
