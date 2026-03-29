@@ -21,7 +21,9 @@ class DashboardClient:
         self.device_id = self._get_or_create_device_id()
         self.connection_status = "disconnected" # "disconnected", "pending", "connected"
         self.device_key = None
+        self.last_command = "idle"
         self._polling_thread = None
+        self._command_thread = None
         self._stop_polling = threading.Event()
 
     def _get_or_create_device_id(self):
@@ -66,7 +68,7 @@ class DashboardClient:
                 data=json.dumps(payload).encode("utf-8"),
                 headers={"Content-Type": "application/json"}
             )
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, timeout=5) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
                 if res_data.get("status") == "success":
                     self.connection_status = "pending"
@@ -93,7 +95,7 @@ class DashboardClient:
                 data=json.dumps(payload).encode("utf-8"),
                 headers={"Content-Type": "application/json"}
             )
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, timeout=5) as response:
                 pass # ignore response body here
         except urllib.error.URLError:
             pass # We still mark as disconnected locally
@@ -105,40 +107,40 @@ class DashboardClient:
 
     def _start_polling(self):
         self._stop_polling.clear()
+        
+        # Thread 1: Monitor Connection Status
         self._polling_thread = threading.Thread(target=self._poll_status, daemon=True)
         self._polling_thread.start()
+        
+        # Thread 2: Monitor Operational Commands (High Speed)
+        self._command_thread = threading.Thread(target=self._poll_command_loop, daemon=True)
+        self._command_thread.start()
 
     def _poll_status(self):
+        """Monitors connection health and server heartbeats."""
         while not self._stop_polling.is_set():
-            # We now poll even when connected to detect server-initiated disconnects
-            poll_interval = 3 if self.connection_status == "pending" else 10
+            # Check for disconnects or approvals every 5 seconds
+            poll_interval = 5
 
             try:
                 # Polling /api/system/device-status/<device_id>?device_key=<key>
                 url = f"{self.server_url}/api/system/device-status/{self.device_id}?device_key={self.device_key}"
                 req = urllib.request.Request(url)
-                with urllib.request.urlopen(req) as response:
-                    raw_res = response.read().decode("utf-8")
-                    res_data = json.loads(raw_res)
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    res_data = json.loads(response.read().decode("utf-8"))
                     
-                    logger.info(f"Dashboard polling response for {self.device_id}: {res_data}")
-                    print(f"Dashboard polling response: {res_data}") # Immediate console visibility
-                    
-                    # Check for status in different possible locations
-                    # 1. Inside 'result' (Real server format)
-                    # 2. Inside 'device' object
-                    # 3. Top level
+                    # Robust Nested Parsing
                     result_data = res_data.get("result") if isinstance(res_data.get("result"), dict) else res_data
                     device_data = result_data.get("device") if isinstance(result_data.get("device"), dict) else result_data
-                    
                     status = device_data.get("connection_status") or device_data.get("status")
                     
                     if status in ["connected", "approved"]:
-                        logger.info(f"Device connection approved! Status: {status}")
-                        print(f"DEBUG: Status '{status}' matched 'connected/approved'")
+                        if self.connection_status != "connected":
+                            logger.info(f"Connection established and approved by server.")
                         self.connection_status = "connected"
+                        
                     elif status in ["disconnected", "rejected"]:
-                        logger.info(f"Device connection {status}")
+                        logger.warning(f"Session terminated by server. Reason: {status}")
                         self.connection_status = "disconnected"
                         self.device_key = None
                         self._stop_polling.set()
@@ -150,5 +152,69 @@ class DashboardClient:
                 print(f"ERROR in polling: {e}")
 
             time.sleep(poll_interval)
+
+    def _poll_command_loop(self):
+        """Independent high-speed thread to sync remote operational commands."""
+        while not self._stop_polling.is_set():
+            # Synchronize operational state with the dashboard every 3 seconds
+            command_interval = 3
+            
+            if self.connection_status == "connected":
+                try:
+                    self._poll_command()
+                except Exception as e:
+                    logger.debug(f"Sync loop transient error: {e}")
+            
+            time.sleep(command_interval)
+
+    def _poll_command(self):
+        """Fetch and enforce latest command from the server specialized endpoint."""
+        try:
+            url = f"{self.server_url}/api/device/command/{self.device_id}"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=5) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+                
+                # Robust Nested Parsing for operational instructions
+                result_data = res_data.get("result") if isinstance(res_data.get("result"), dict) else res_data
+                command = result_data.get("command", "idle")
+                
+                # State-aware synchronization:
+                # We compare the server's desired command with the actual hardware state.
+                from backend.services.camera_manager import camera_manager
+                is_running = camera_manager.is_running()
+                
+                if command == "start_camera" and not is_running:
+                    logger.info("Remote priority sync: Server requires START but engine is IDLE. Forcing start.")
+                    self._execute_command("start_camera")
+                elif command == "stop_camera" and is_running:
+                    logger.info("Remote priority sync: Server requires STOP but engine is RUNNING. Forcing stop.")
+                    self._execute_command("stop_camera")
+                
+                self.last_command = command
+                
+        except Exception as e:
+            logger.error(f"Error polling command: {e}")
+
+    def _execute_command(self, command):
+        """Translate server commands into local engine actions."""
+        try:
+            from backend.services.camera_manager import camera_manager
+            
+            if command == "start_camera":
+                logger.info("Executing remote command: START")
+                camera_manager.start_engine()
+                camera_manager.recognition_active = True
+            elif command == "stop_camera":
+                logger.info("Executing remote command: STOP")
+                camera_manager.stop_engine()
+            elif command == "idle":
+                # Handle idle state if necessary, or just maintain current state
+                pass
+            else:
+                logger.warning(f"Unknown command received: {command}")
+                
+        except Exception as e:
+            logger.error(f"Failed to execute command '{command}': {e}")
 
 dashboard_client_instance = DashboardClient()

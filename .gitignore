@@ -33,6 +33,11 @@ Thumbs.db
 desktop.ini
 
 # Project specific overrides/artifacts
+dashboard_client/device_id.txt
 analysis_results.md
 tests/
 stitch/
+
+# IDEs
+.vscode/
+.idea/
