@@ -3,6 +3,8 @@ import time
 from datetime import datetime
 import threading
 from database.database import DB_NAME
+import urllib.request
+import json
 from utils.logger import logger
 
 class PolicyManager:
@@ -39,7 +41,58 @@ class PolicyManager:
     def _process_loop(self):
         while self.running:
             self._process_new_logs()
+            self._sync_logs_to_server()
             time.sleep(1) # Check every 1 second
+
+    def _sync_logs_to_server(self):
+        from database.database import get_unsynced_logs, mark_log_synced
+        from dashboard_client.api_client import dashboard_client_instance
+        
+        # Only attempt sync if we are connected and a session is active
+        # (Alternatively, always try if connected, but server might 403)
+        if dashboard_client_instance.connection_status != "connected":
+            return
+
+        unsynced = get_unsynced_logs()
+        if not unsynced:
+            return
+
+        logger.info(f"Attempting to sync {len(unsynced)} logs to server...")
+        
+        for log in unsynced:
+            payload = {
+                "device_id": dashboard_client_instance.device_id,
+                "student_id": log["student_id"],
+                "student_name": log["student_name"],
+                "timestamp": log["timestamp"],
+                "recognition_status": log["event_type"],
+                "late_entry": 1 if log["late_approval_required"] else 0,
+                "bus_delay": 1 if log["bus_delay_flag"] else 0,
+                "session_name": log["session"]
+            }
+            
+            try:
+                url = f"{dashboard_client_instance.server_url}/api/attendance/log"
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    if response.status == 200:
+                        mark_log_synced(log["id"])
+                        logger.info(f"Successfully synced log {log['id']} for student {log['student_id']}")
+                    else:
+                        logger.warning(f"Failed to sync log {log['id']}. Server returned status: {response.status}")
+            except urllib.error.HTTPError as e:
+                if e.code == 403:
+                    logger.warning(f"Sync rejected by server (Forbidden). Likely no active session.")
+                else:
+                    logger.error(f"HTTP error during sync: {e}")
+                break # Stop processing for this loop if server error
+            except Exception as e:
+                logger.error(f"Connectivity error during log sync: {e}")
+                break # Stop processing for this loop
 
     def _process_new_logs(self):
         conn = sqlite3.connect(DB_NAME)

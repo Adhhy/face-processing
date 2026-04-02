@@ -79,10 +79,17 @@ def init_db():
             session TEXT,
             late_approval_required INTEGER DEFAULT 0,
             bus_delay_flag INTEGER DEFAULT 0,
+            synced INTEGER DEFAULT 0,
             FOREIGN KEY(log_id) REFERENCES logs(id),
             FOREIGN KEY(student_id) REFERENCES students(id)
         )
     ''')
+
+    # Migration for existing databases
+    try:
+        cursor.execute("ALTER TABLE policy_logs ADD COLUMN synced INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass # Column already exists
 
     # Create admin_users table
     cursor.execute('''
@@ -332,3 +339,48 @@ def get_recent_policy_logs(limit=50, since=None):
     except Exception as e:
         logger.error(f"Database error retrieving policy logs: {e}")
         return []
+def get_unsynced_logs():
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT pl.id, pl.log_id, pl.student_id, s.name, pl.timestamp, pl.date, pl.event_type, pl.period, pl.session, 
+                   pl.late_approval_required, pl.bus_delay_flag 
+            FROM policy_logs pl
+            LEFT JOIN students s ON pl.student_id = s.id
+            WHERE pl.synced = 0
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+        
+        logs = []
+        for row in rows:
+            logs.append({
+                "id": row[0],
+                "log_id": row[1],
+                "student_id": row[2],
+                "student_name": row[3] if row[3] else "Unknown",
+                "timestamp": row[4],
+                "date": row[5],
+                "event_type": row[6],
+                "period": row[7],
+                "session": row[8],
+                "late_approval_required": bool(row[9]),
+                "bus_delay_flag": bool(row[10])
+            })
+        return logs
+    except Exception as e:
+        logger.error(f"Database error fetching unsynced logs: {e}")
+        return []
+
+def mark_log_synced(log_id):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute('UPDATE policy_logs SET synced = 1 WHERE id = ?', (log_id,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Database error marking log as synced: {e}")
+        return False

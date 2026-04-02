@@ -22,6 +22,7 @@ class DashboardClient:
         self.connection_status = "disconnected" # "disconnected", "pending", "connected"
         self.device_key = None
         self.last_command = "idle"
+        self.is_session_active = False
         self._polling_thread = None
         self._command_thread = None
         self._stop_polling = threading.Event()
@@ -191,6 +192,7 @@ class DashboardClient:
                     logger.info("Remote priority sync: Server requires STOP but engine is RUNNING. Forcing stop.")
                     self._execute_command("stop_camera")
                 
+                self.is_session_active = (command == "start_camera")
                 self.last_command = command
                 
         except Exception as e:
