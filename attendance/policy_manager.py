@@ -175,6 +175,10 @@ class PolicyManager:
     def _get_period_and_session(self, t):
         from datetime import time
         
+        # Lower boundary check (Ingore logs before 7:30 AM)
+        if t < time(7, 30):
+            return None, None
+
         # Morning Session
         if t < time(9, 25): period, session = "P1", "Morning"
         elif t < time(10, 20): period, session = "P2", "Morning"

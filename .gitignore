@@ -34,10 +34,17 @@ desktop.ini
 
 # Project specific overrides/artifacts
 dashboard_client/device_id.txt
-analysis_results.md
+attendance.db
+*.txt
+*.bak
+*.old
+*.tmp
+temp/
+tmp/
 tests/
 stitch/
-
+*.swp
+*.swo
 # IDEs
 .vscode/
 .idea/
